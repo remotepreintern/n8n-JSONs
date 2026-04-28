@@ -246,12 +246,12 @@
     },
     {
       "parameters": {
-        "method": "PATCH",
+        "method": "POST",
         "url": "=https://www.googleapis.com/drive/v3/files/{{ $json.fileId }}/permissions",
         "options": {},
         "sendBody": true,
         "bodyContentType": "json",
-        "jsonBody": "=JSON.stringify({\"role\":\"reader\",\"type\":\"anyone\"})",
+        "jsonBody": "=JSON.stringify({\"role\":\"reader\",\"type\":\"anyone\",\"allowFileDiscovery\":false})",
         "authentication": "genericCredentialType",
         "genericAuthType": "oAuth2Api",
         "sendHeaders": true,
@@ -950,7 +950,7 @@
         },
         "sendBody": true,
         "bodyContentType": "json",
-        "jsonBody": "=JSON.stringify({\"snippet\":{\"title\":\"{{ $json.youtube_video_title }}\" + \"\",\"description\":\"{{ $json.youtube_video_description }}\\n\\n{{ $json.hashtags.join(' ') }}\",\"tags\":{{ JSON.stringify($json.youtube_video_tags) }},\"categoryId\":\"22\"},\"status\":{\"privacyStatus\":\"public\",\"selfDeclaredMadeForKids\":false}})",
+        "jsonBody": "=JSON.stringify({\"snippet\":{\"title\":\"{{ $json.youtube_video_title }}\",\"description\":\"{{ $json.youtube_video_description }}\\n\\n{{ $json.hashtags.join(' ') }}\",\"tags\":{{ JSON.stringify($json.youtube_video_tags) }},\"categoryId\":\"22\"},\"status\":{\"privacyStatus\":\"public\",\"selfDeclaredMadeForKids\":false}})",
         "authentication": "genericCredentialType",
         "genericAuthType": "oAuth2Api",
         "sendHeaders": true,
