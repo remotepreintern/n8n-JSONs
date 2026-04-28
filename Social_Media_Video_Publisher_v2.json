@@ -1,0 +1,2482 @@
+{
+  "name": "🎬 Social Media Video Auto Publisher v2 (WhatsApp + Sheets)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 🎬 Social Media Video Auto Publisher v2\n### Full Setup Checklist\n\n**Step 1 – Google Drive Folder Structure**\nCreate these folders in Google Drive:\n```\n📁 Social Media Publisher (Parent)\n  📁 Upload Folder     ← n8n watches this\n  📁 Completed Folder  ← n8n moves files here\n  📁 Report Sheet      ← optional, for Sheets\n```\nCopy each folder's ID from its URL.\n\n**Step 2 – Add 7 Credentials** *(Settings → Credentials)*\n| # | Name | Type | Details |\n|---|------|------|---------|\n| 1 | Google Drive OAuth2 | Google Drive OAuth2 API | OAuth2 flow |\n| 2 | OpenAI API Key (Header Auth) | HTTP Header Auth | `Authorization: ****** |\n| 3 | Facebook Page Access Token | HTTP Header Auth | `Authorization: ****** |\n| 4 | YouTube OAuth2 | OAuth2 (Google) | scope: youtube.upload |\n| 5 | TikTok Access Token | HTTP Header Auth | `Authorization: ****** |\n| 6 | WhatsApp Cloud API Token | HTTP Header Auth | `Authorization: ****** |\n| 7 | Google Sheets OAuth2 | Google Sheets OAuth2 API | OAuth2 flow |\n\n**Step 3 – Replace Placeholders in Nodes**\n- `YOUR_UPLOAD_FOLDER_ID` → Upload subfolder ID\n- `YOUR_COMPLETED_FOLDER_ID` → Completed subfolder ID\n- `YOUR_FACEBOOK_PAGE_ID` → Facebook Page numeric ID\n- `YOUR_INSTAGRAM_BUSINESS_USER_ID` → Instagram Business ID\n- `YOUR_WA_PHONE_NUMBER_ID` → WhatsApp Phone Number ID (from Meta dashboard)\n- `YOUR_GOOGLE_SHEET_ID` → Google Sheet ID for reports\n- `YOUR_GOOGLE_SHEET_NAME` → Sheet tab name (e.g. \"Uploads\")\n\n**Step 4 – Activate** *(toggle top-right)*\n\n**How it works:**\n1. Drop a video in Upload Folder\n2. Workflow triggers, AI generates content\n3. WhatsApp preview sent to +977 9845670262\n4. Tap APPROVE to upload or CANCEL to stop\n5. Auto-proceeds after 2 minutes if no response\n6. Sequential upload to all 10 platforms\n7. WhatsApp final report with per-platform status\n8. File moved to Completed Folder\n9. Row added to Google Sheet",
+        "height": 820,
+        "width": 560,
+        "color": 5
+      },
+      "id": "note_setup",
+      "name": "📋 SETUP GUIDE v2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -720,
+        -720
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 📲 WhatsApp Business Cloud API Setup\n\n### What You Need\n1. **Meta Business Account** (business.facebook.com)\n2. **WhatsApp Business API** enabled\n3. A registered WhatsApp Business Phone Number\n\n### Get Your Phone Number ID\n1. Go to Meta for Developers (developers.facebook.com)\n2. Your App → WhatsApp → API Setup\n3. Copy the **Phone number ID** (not the phone number itself)\n4. This goes in `YOUR_WA_PHONE_NUMBER_ID` placeholder\n\n### Get Your Token\n**Temporary (testing):** Copy from API Setup page (expires 24h)\n**Permanent:** Create System User in Business Settings → generate token with `whatsapp_business_messaging` permission\n\n### Approval Links in Message\nThe workflow sends clickable URLs in the WhatsApp message:\n- **APPROVE**: User taps → n8n resumes execution → uploads start\n- **CANCEL**: User taps → n8n stops the workflow\n- **No response**: 2-minute timeout → auto-proceeds\n\n### Your notification number\n`+977 9845670262` (Nepal) is pre-configured as the recipient.\n\n### Required Permission\n`whatsapp_business_messaging`\n",
+        "height": 500,
+        "width": 420,
+        "color": 3
+      },
+      "id": "note_wa",
+      "name": "📲 WhatsApp API Guide",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1500,
+        -720
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 📘 Facebook – Setup\n\n### Required\n- Facebook Developer App (developers.facebook.com)\n- **Page Access Token** (long-lived) with:\n  `pages_manage_posts`, `pages_read_engagement`, `publish_video`\n\n### Endpoints Used\n| Feature | Endpoint |\n|---------|----------|\n| Page Post | `POST /v18.0/PAGE_ID/videos` (file_url) |\n| Reels Start | `POST /v18.0/PAGE_ID/video_reels` (upload_phase=start) |\n| Reels Upload | `PUT {upload_url}` binary |\n| Reels Publish | `POST /v18.0/PAGE_ID/video_reels` (upload_phase=finish) |\n| Story Start | `POST /v18.0/PAGE_ID/video_stories` (upload_phase=start) |\n| Story Upload | `PUT {upload_url}` binary |\n| Story Publish | `POST /v18.0/PAGE_ID/video_stories` (upload_phase=finish) |\n\n### Get Page ID\nFacebook Page → About → scroll to bottom\n",
+        "height": 400,
+        "width": 400,
+        "color": 2
+      },
+      "id": "note_fb",
+      "name": "📘 Facebook API Guide",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1500,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 📸 Instagram – Setup\n\n### Required\n- Instagram Business/Creator account linked to FB Page\n- Same **Facebook Page Token**\n- Permissions: `instagram_basic`, `instagram_content_publish`\n\n### Upload Flow\n1. **Container** → `/{IG_ID}/media` with `video_url` (must be public HTTPS)\n2. **Wait 60s** → video processing on Meta servers\n3. **Publish** → `/{IG_ID}/media_publish` with `creation_id`\n\n### ⚠️ Instagram Public URL Requirement\nInstagram REQUIRES a publicly accessible video URL (not requiring login).\nThe workflow uses Google Drive's public download link.\nIf Drive public URL doesn't work, see alternatives:\n- Cloudinary (free tier, direct URL)\n- Bunny CDN or any public storage\n**Mega.nz** does NOT work (encrypted, no direct HTTP URLs).\n",
+        "height": 380,
+        "width": 400,
+        "color": 2
+      },
+      "id": "note_ig",
+      "name": "📸 Instagram API Guide",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## ▶️ YouTube Setup\n- Google Cloud Console → YouTube Data API v3\n- OAuth2 Client (Web App), scope: `youtube.upload`\n- Shorts: ≤60s + vertical → auto-classified by YouTube\n- Stories: **DISCONTINUED June 2023**, not included\n\n## 🎵 TikTok Setup\n- developers.tiktok.com → Content Posting API permission\n- Scopes: `video.publish`, `video.upload`\n- Story API requires separate TikTok approval\n- Privacy: `PUBLIC_TO_EVERYONE` (configurable in TT Init nodes)\n\n## 📊 Google Sheets Setup\n- Create a Google Sheet with these column headers:\n  `Timestamp | File | FileID | FB Post | FB Reels | FB Story | IG Post | IG Reels | IG Story | YT Video | YT Shorts | TT Video | TT Story | Overall | Notes`\n- Copy the Sheet ID from its URL\n- Sheet ID goes in `YOUR_GOOGLE_SHEET_ID`\n- Tab name goes in `YOUR_GOOGLE_SHEET_NAME`\n",
+        "height": 460,
+        "width": 420,
+        "color": 2
+      },
+      "id": "note_yt_tt",
+      "name": "▶️ YouTube + TikTok Guide",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1500,
+        740
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## ❓ Can Mega.nz Replace Google Drive for Instagram?\n\n### Short Answer: ❌ No — Mega.nz is NOT suitable\n\n### Why Mega.nz Doesn't Work for Instagram\n1. **Encrypted links**: Mega uses end-to-end encryption with the key embedded in the URL fragment (#). HTTP servers can't read fragments.\n2. **No direct HTTP download**: Mega requires its SDK/browser extension to decrypt and stream files. There's no plain `https://` download URL Instagram can fetch.\n3. **No official API**: Mega has no public REST API for file operations or public sharing in a way Instagram accepts.\n4. **n8n compatibility**: No native n8n Mega node exists.\n\n### Mega.nz Free Tier: Yes, 20GB free\nBut the technical limitations above make it unusable for this workflow.\n\n### ✅ Better Alternatives for Instagram Public URLs\n| Option | Free? | Works? | Notes |\n|--------|-------|--------|-------|\n| **Google Drive** *(current)* | ✅ | ✅ | Works if file is shared publicly |\n| **Cloudinary** | ✅ (25GB) | ✅✅ | Best option, native CDN URL |\n| **Bunny CDN** | ❌ (paid) | ✅✅ | Fast, reliable |\n| **Amazon S3** | ❌ (paid) | ✅✅ | Pre-signed URLs |\n| **Google Cloud Storage** | ✅ (trial) | ✅✅ | Public bucket URL |\n\n### 💡 Recommendation\nStick with Google Drive + public permission (already set by this workflow).\nIf Instagram still rejects, upload to Cloudinary first and use its CDN URL.\n",
+        "height": 580,
+        "width": 560,
+        "color": 7
+      },
+      "id": "note_mega",
+      "name": "❓ Mega.nz for Instagram?",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -720,
+        200
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "error_trigger",
+      "name": "⚠️ Workflow Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -400,
+        1000
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\n// Build WhatsApp error notification\nconst e = $json.execution || {};\nconst err = e.error || {};\nconst msg = [\n  '🚨 *Workflow Error Alert*',\n  '',\n  '📋 Workflow: ' + ($json.workflow?.name || 'Social Media Publisher'),\n  '🆔 Execution: ' + (e.id || 'unknown'),\n  '📍 Last Node: ' + (e.lastNodeExecuted || 'unknown'),\n  '',\n  '❌ Error:',\n  (err.message || 'Unknown error').substring(0, 300),\n  '',\n  '⏰ Time: ' + new Date().toISOString(),\n  '',\n  '🔗 View: ' + (e.url || 'Check n8n dashboard')\n].join('\\n');\n\nreturn {\n  json: {\n    messaging_product: 'whatsapp',\n    to: '+9779845670262',\n    type: 'text',\n    text: { preview_url: false, body: msg }\n  }\n};\n"
+      },
+      "id": "error_wa_prep",
+      "name": "📲 CODE: Build Error WA Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -180,
+        1000
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/YOUR_WA_PHONE_NUMBER_ID/messages",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "id": "error_wa_send",
+      "name": "📲 WA: Send Error Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        40,
+        1000
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WA_CRED_ID",
+          "name": "WhatsApp Cloud API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "triggerOn": "specificFolder",
+        "folderToWatch": {
+          "__rl": true,
+          "value": "YOUR_UPLOAD_FOLDER_ID",
+          "mode": "id"
+        },
+        "event": "fileCreated",
+        "options": {}
+      },
+      "id": "drive_trigger",
+      "name": "📁 Google Drive: New File in Upload Folder",
+      "type": "n8n-nodes-base.googleDriveTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "REPLACE_GDRIVE_CRED_ID",
+          "name": "Google Drive OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "mime-check",
+              "leftValue": "={{ $json.mimeType }}",
+              "rightValue": "video/",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "video_check",
+      "name": "🔍 IF: Is Video File?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "not_video",
+      "name": "🚫 Non-Video File: Skip",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        440,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "fileId",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "fileName",
+              "value": "={{ $json.name }}",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "mimeType",
+              "value": "={{ $json.mimeType }}",
+              "type": "string"
+            },
+            {
+              "id": "a4",
+              "name": "fileSize",
+              "value": "={{ $json.size || 0 }}",
+              "type": "number"
+            },
+            {
+              "id": "a5",
+              "name": "description",
+              "value": "={{ $json.description || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "a6",
+              "name": "publicUrl",
+              "value": "=https://drive.google.com/uc?export=download&id={{ $json.id }}&confirm=t",
+              "type": "string"
+            },
+            {
+              "id": "a7",
+              "name": "shareUrl",
+              "value": "=https://drive.google.com/file/d/{{ $json.id }}/view?usp=sharing",
+              "type": "string"
+            },
+            {
+              "id": "a8",
+              "name": "uploadFolderId",
+              "value": "YOUR_UPLOAD_FOLDER_ID",
+              "type": "string"
+            },
+            {
+              "id": "a9",
+              "name": "completedFolderId",
+              "value": "YOUR_COMPLETED_FOLDER_ID",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "set_file_info",
+      "name": "⚙️ SET: Extract File Info",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://www.googleapis.com/drive/v3/files/{{ $json.fileId }}/permissions",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "=JSON.stringify({\"role\":\"reader\",\"type\":\"anyone\",\"allowFileDiscovery\":false})",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "id": "make_public",
+      "name": "🔓 Drive: Make File Publicly Accessible",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        660,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "REPLACE_GDRIVE_CRED_ID",
+          "name": "Google Drive OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "=JSON.stringify({\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"system\",\"content\":\"You are a professional social media content creator. Generate engaging, platform-optimised content for a video. Respond ONLY with valid JSON (no markdown fences). Use exactly this structure: {\\\"facebook_post_caption\\\":\\\"...\\\",\\\"facebook_reels_caption\\\":\\\"...\\\",\\\"facebook_story_text\\\":\\\"...\\\",\\\"instagram_post_caption\\\":\\\"...\\\",\\\"instagram_reels_caption\\\":\\\"...\\\",\\\"instagram_story_text\\\":\\\"...\\\",\\\"youtube_video_title\\\":\\\"...\\\",\\\"youtube_video_description\\\":\\\"...\\\",\\\"youtube_video_tags\\\":[\\\"tag1\\\",\\\"tag2\\\"],\\\"youtube_shorts_title\\\":\\\"...\\\",\\\"tiktok_video_caption\\\":\\\"...\\\",\\\"tiktok_story_text\\\":\\\"...\\\",\\\"content_summary\\\":\\\"1-2 sentence summary\\\",\\\"hashtags\\\":[\\\"#tag1\\\",\\\"#tag2\\\"]}\"},{\"role\":\"user\",\"content\":\"Create social media content for video: {{ $json.fileName.replace(/[\\\"\\\\]/g,'') }}. Description: {{ ($json.description||'').replace(/[\\\"\\\\]/g,'') }}. Make engaging with emojis, strong CTA, and 10-15 hashtags.\"}],\"response_format\":{\"type\":\"json_object\"},\"max_tokens\":2000})",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "id": "ai_generate",
+      "name": "🤖 AI: Generate Platform Content",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        880,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_OPENAI_CRED_ID",
+          "name": "OpenAI API Key (Header Auth)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $('⚙️ SET: Extract File Info').item.json.fileId }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "download_video",
+      "name": "📥 Drive: Download Video",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1100,
+        0
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "REPLACE_GDRIVE_CRED_ID",
+          "name": "Google Drive OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\n// ── Parse AI response ──────────────────────────────────────────────────────\nconst aiNode = $('🤖 AI: Generate Platform Content').first();\nlet ai = {};\ntry {\n  ai = JSON.parse(aiNode.json.choices[0].message.content);\n} catch (e) {\n  throw new Error(\n    '⚠️ Failed to parse OpenAI JSON response. ' +\n    'Raw: ' + JSON.stringify(aiNode.json).substring(0, 400)\n  );\n}\n\n// ── Validate required AI fields ───────────────────────────────────────────\nconst required = [\n  'facebook_post_caption','facebook_reels_caption','facebook_story_text',\n  'instagram_post_caption','instagram_reels_caption','instagram_story_text',\n  'youtube_video_title','youtube_video_description','youtube_video_tags',\n  'youtube_shorts_title','tiktok_video_caption','tiktok_story_text',\n  'content_summary','hashtags'\n];\nconst fallback = ai.facebook_post_caption || 'Check out this video!';\nfor (const field of required) {\n  if (!ai[field]) ai[field] = field.endsWith('tags') || field === 'hashtags' ? ['#video'] : fallback;\n}\nif (!Array.isArray(ai.youtube_video_tags)) ai.youtube_video_tags = ['video'];\nif (!Array.isArray(ai.hashtags)) ai.hashtags = ['#video'];\n\n// ── Build item ─────────────────────────────────────────────────────────────\nconst fi = $('⚙️ SET: Extract File Info').first().json;\n\nreturn {\n  json: {\n    ...ai,\n    fileId:            fi.fileId,\n    fileName:          fi.fileName,\n    mimeType:          fi.mimeType || 'video/mp4',\n    fileSize:          fi.fileSize || 0,\n    publicUrl:         fi.publicUrl,\n    shareUrl:          fi.shareUrl,\n    description:       fi.description,\n    uploadFolderId:    fi.uploadFolderId,\n    completedFolderId: fi.completedFolderId,\n    _processedAt:      new Date().toISOString(),\n    _status:           {}\n  },\n  binary: $input.item.binary\n};\n"
+      },
+      "id": "assemble_data",
+      "name": "🧩 CODE: Assemble Final Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\n// Build the approval WhatsApp message with approve/reject links\n// $execution.resumeUrl is the n8n Wait node webhook resume URL\nconst base    = $input.item.json;\nconst resumeUrl = $execution.resumeUrl || 'https://YOUR_N8N_INSTANCE/webhook-waiting/PLACEHOLDER';\n\nconst approveUrl = resumeUrl + '?reply=approve';\nconst rejectUrl  = resumeUrl + '?reply=reject';\n\nconst contentPreview = [\n  '📝 *Facebook:* ' + (base.facebook_post_caption || '').substring(0, 80),\n  '🎬 *YouTube:* '  + (base.youtube_video_title   || ''),\n  '🎵 *TikTok:* '   + (base.tiktok_video_caption  || '').substring(0, 80),\n  '',\n  '📌 *Summary:* '  + (base.content_summary || '').substring(0, 120),\n].join('\\n');\n\nconst tags = Array.isArray(base.hashtags) ? base.hashtags.slice(0,5).join(' ') : '';\n\nconst msgBody = [\n  '🎬 *New Video Ready to Publish*',\n  '━━━━━━━━━━━━━━━━━━━━━━━━━',\n  '',\n  '📁 *File:* ' + base.fileName,\n  '🔗 *Preview:* ' + base.shareUrl,\n  '📦 *Size:* ' + (Math.round((base.fileSize||0)/1024/1024*10)/10) + ' MB',\n  '',\n  '📢 *Content Preview:*',\n  contentPreview,\n  '',\n  tags,\n  '',\n  '━━━━━━━━━━━━━━━━━━━━━━━━━',\n  '✅ *APPROVE & Upload:*',\n  approveUrl,\n  '',\n  '❌ *CANCEL Upload:*',\n  rejectUrl,\n  '',\n  '⏰ _Auto-proceeds in 2 min if no response._'\n].join('\\n');\n\nreturn {\n  json: {\n    ...base,\n    _approveUrl:   approveUrl,\n    _rejectUrl:    rejectUrl,\n    _waApprovalMsg: msgBody\n  },\n  binary: $input.item.binary\n};\n"
+      },
+      "id": "build_wa_approval",
+      "name": "📲 CODE: Build WA Approval Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/YOUR_WA_PHONE_NUMBER_ID/messages",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "=JSON.stringify({\"messaging_product\":\"whatsapp\",\"to\":\"+9779845670262\",\"type\":\"text\",\"text\":{\"preview_url\":true,\"body\":\"{{ $json._waApprovalMsg }}\"}})",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "id": "wa_send_approval",
+      "name": "📲 WA: Send Preview & Approval Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1760,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WA_CRED_ID",
+          "name": "WhatsApp Cloud API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resume": "webhook",
+        "limitWaitTime": true,
+        "resumeAmount": 2,
+        "resumeUnit": "minutes",
+        "options": {
+          "webhookSuffix": "approval"
+        }
+      },
+      "id": "approval_wait",
+      "name": "⏳ WAIT: Approval (2-min timeout)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        1980,
+        0
+      ],
+      "webhookId": "approval_wait"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\n// Check if we received a webhook response or timed out\nconst resp = $input.item.json || {};\nconst isTimedOut = !resp || Object.keys(resp).length === 0 ||\n                   resp._waitTimedOut === true || resp.timeout === true;\n\nconst reply   = (resp?.query?.reply || '').toLowerCase().trim();\nconst isStop  = reply === 'reject' || reply === 'stop' || reply === 'cancel' || reply === 'no';\nconst isApprove = reply === 'approve' || reply === 'ok' || reply === 'yes' || isTimedOut;\n\n// Restore the assembled data which was stored before the Wait node\nconst base = $('🧩 CODE: Assemble Final Data').first();\n\nreturn {\n  json: {\n    ...base.json,\n    _approval: {\n      reply:         isTimedOut ? 'timeout (auto-proceed)' : reply,\n      isRejected:    isStop,\n      isApproved:    isApprove,\n      timedOut:      isTimedOut\n    }\n  },\n  binary: base.binary\n};\n"
+      },
+      "id": "parse_approval",
+      "name": "🔍 CODE: Parse Approval Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "reject-check",
+              "leftValue": "={{ $json._approval.isRejected }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "check_rejected",
+      "name": "🔒 IF: Upload Rejected?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/YOUR_WA_PHONE_NUMBER_ID/messages",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "=JSON.stringify({\"messaging_product\":\"whatsapp\",\"to\":\"+9779845670262\",\"type\":\"text\",\"text\":{\"preview_url\":false,\"body\":\"🚫 *Upload Cancelled*\\n\\nFile: {{ $json.fileName }}\\n\\nYou replied: \\\"{{ $json._approval.reply }}\\\"\\nThe upload has been stopped. Drop the file in Upload Folder again to retry.\"}})",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "id": "wa_cancelled",
+      "name": "📲 WA: Send Upload Cancelled",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2640,
+        220
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WA_CRED_ID",
+          "name": "WhatsApp Cloud API Token"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "halt_upload",
+      "name": "🛑 HALT: Upload Cancelled",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2860,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/YOUR_FACEBOOK_PAGE_ID/videos",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "file_url",
+              "value": "={{ $json.publicUrl }}"
+            },
+            {
+              "name": "description",
+              "value": "={{ $json.facebook_post_caption + '\\n\\n' + $json.hashtags.join(' ') }}"
+            },
+            {
+              "name": "published",
+              "value": "true"
+            }
+          ]
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "fb_page_post",
+      "name": "📘 [1/10] FB: Page Video Post",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2640,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_FB_CRED_ID",
+          "name": "Facebook Page Access Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\n// Capture result of fb_page_post upload\nconst httpResult = $input.item.json;\nconst isError    = httpResult != null && (\n  httpResult.error != null ||\n  (typeof httpResult.message === 'string' && httpResult.message.toLowerCase().includes('error')) ||\n  (httpResult.statusCode != null && httpResult.statusCode >= 400)\n);\n\n// Get accumulated status from previous capture (or init)\nconst prevJson = $(\"\\ud83e\\udde9 CODE: Assemble Final Data\").first().json;\nconst status   = { ...(prevJson._status || {}) };\nstatus[\"fb_page_post\"] = {\n  ok:    !isError,\n  error: isError ? (\n    httpResult?.error?.message ||\n    httpResult?.message ||\n    JSON.stringify(httpResult).substring(0, 200)\n  ) : null\n};\n\n// Re-attach binary and pass full data forward\nconst base = $(\"\\ud83e\\udde9 CODE: Assemble Final Data\").first();\nreturn {\n  json:   { ...base.json, _status: status },\n  binary: base.binary\n};\n"
+      },
+      "id": "cap_fb_post",
+      "name": "📊 CAP: FB Page Post Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2880,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/YOUR_FACEBOOK_PAGE_ID/video_reels",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "upload_phase",
+              "value": "start"
+            }
+          ]
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "fb_reels_init",
+      "name": "📘 [2/10] FB: Reels – Init Upload",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        3120,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_FB_CRED_ID",
+          "name": "Facebook Page Access Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst initData = $input.item.json;\nif (initData.error || !initData.upload_url) {\n  // Init failed – surface error so capture node can record it\n  throw new Error('FB Reels Init failed: ' + (initData?.error?.message || JSON.stringify(initData).substring(0, 200)));\n}\nreturn {\n  json: {\n    uploadUrl: initData.upload_url,\n    videoId:   initData.video_id,\n    fileSize:  $('🧩 CODE: Assemble Final Data').first().json.fileSize\n  },\n  binary: $('🧩 CODE: Assemble Final Data').first().binary\n};\n"
+      },
+      "id": "fb_reels_prep",
+      "name": "📘 FB: Reels – Prep Binary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3360,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.uploadUrl }}",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "binaryData",
+        "inputDataFieldName": "data",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "offset",
+              "value": "0"
+            },
+            {
+              "name": "file_size",
+              "value": "={{ $json.fileSize }}"
+            }
+          ]
+        }
+      },
+      "id": "fb_reels_upload",
+      "name": "📘 FB: Reels – Upload Video",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        3600,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_FB_CRED_ID",
+          "name": "Facebook Page Access Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/YOUR_FACEBOOK_PAGE_ID/video_reels",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "upload_phase",
+              "value": "finish"
+            },
+            {
+              "name": "video_id",
+              "value": "={{ $('📘 [2/10] FB: Reels – Init Upload').item.json.video_id }}"
+            },
+            {
+              "name": "video_state",
+              "value": "PUBLISHED"
+            },
+            {
+              "name": "description",
+              "value": "={{ $('🧩 CODE: Assemble Final Data').first().json.facebook_reels_caption + '\\n\\n' + $('🧩 CODE: Assemble Final Data').first().json.hashtags.join(' ') }}"
+            }
+          ]
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "fb_reels_publish",
+      "name": "📘 FB: Reels – Publish",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        3840,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_FB_CRED_ID",
+          "name": "Facebook Page Access Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\n// Capture result of fb_reels upload\nconst httpResult = $input.item.json;\nconst isError    = httpResult != null && (\n  httpResult.error != null ||\n  (typeof httpResult.message === 'string' && httpResult.message.toLowerCase().includes('error')) ||\n  (httpResult.statusCode != null && httpResult.statusCode >= 400)\n);\n\n// Get accumulated status from previous capture (or init)\nconst prevJson = $(\"\\ud83d\\udcca CAP: FB Page Post Status\").first().json;\nconst status   = { ...(prevJson._status || {}) };\nstatus[\"fb_reels\"] = {\n  ok:    !isError,\n  error: isError ? (\n    httpResult?.error?.message ||\n    httpResult?.message ||\n    JSON.stringify(httpResult).substring(0, 200)\n  ) : null\n};\n\n// Re-attach binary and pass full data forward\nconst base = $(\"\\ud83e\\udde9 CODE: Assemble Final Data\").first();\nreturn {\n  json:   { ...base.json, _status: status },\n  binary: base.binary\n};\n"
+      },
+      "id": "cap_fb_reels",
+      "name": "📊 CAP: FB Reels Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4080,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/YOUR_FACEBOOK_PAGE_ID/video_stories",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "upload_phase",
+              "value": "start"
+            }
+          ]
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "fb_story_init",
+      "name": "📘 [3/10] FB: Story – Init Upload",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        4320,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_FB_CRED_ID",
+          "name": "Facebook Page Access Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst initData = $input.item.json;\nif (initData.error || !initData.upload_url) {\n  throw new Error('FB Story Init failed: ' + (initData?.error?.message || JSON.stringify(initData).substring(0, 200)));\n}\nreturn {\n  json: {\n    uploadUrl: initData.upload_url,\n    videoId:   initData.video_id,\n    fileSize:  $('🧩 CODE: Assemble Final Data').first().json.fileSize\n  },\n  binary: $('🧩 CODE: Assemble Final Data').first().binary\n};\n"
+      },
+      "id": "fb_story_prep",
+      "name": "📘 FB: Story – Prep Binary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4560,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.uploadUrl }}",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "binaryData",
+        "inputDataFieldName": "data",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "offset",
+              "value": "0"
+            },
+            {
+              "name": "file_size",
+              "value": "={{ $json.fileSize }}"
+            }
+          ]
+        }
+      },
+      "id": "fb_story_upload",
+      "name": "📘 FB: Story – Upload Video",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        4800,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_FB_CRED_ID",
+          "name": "Facebook Page Access Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/YOUR_FACEBOOK_PAGE_ID/video_stories",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "upload_phase",
+              "value": "finish"
+            },
+            {
+              "name": "video_id",
+              "value": "={{ $('📘 [3/10] FB: Story – Init Upload').item.json.video_id }}"
+            },
+            {
+              "name": "video_state",
+              "value": "PUBLISHED"
+            }
+          ]
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "fb_story_publish",
+      "name": "📘 FB: Story – Publish",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        5040,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_FB_CRED_ID",
+          "name": "Facebook Page Access Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\n// Capture result of fb_story upload\nconst httpResult = $input.item.json;\nconst isError    = httpResult != null && (\n  httpResult.error != null ||\n  (typeof httpResult.message === 'string' && httpResult.message.toLowerCase().includes('error')) ||\n  (httpResult.statusCode != null && httpResult.statusCode >= 400)\n);\n\n// Get accumulated status from previous capture (or init)\nconst prevJson = $(\"\\ud83d\\udcca CAP: FB Reels Status\").first().json;\nconst status   = { ...(prevJson._status || {}) };\nstatus[\"fb_story\"] = {\n  ok:    !isError,\n  error: isError ? (\n    httpResult?.error?.message ||\n    httpResult?.message ||\n    JSON.stringify(httpResult).substring(0, 200)\n  ) : null\n};\n\n// Re-attach binary and pass full data forward\nconst base = $(\"\\ud83e\\udde9 CODE: Assemble Final Data\").first();\nreturn {\n  json:   { ...base.json, _status: status },\n  binary: base.binary\n};\n"
+      },
+      "id": "cap_fb_story",
+      "name": "📊 CAP: FB Story Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5280,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/YOUR_INSTAGRAM_BUSINESS_USER_ID/media",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "media_type",
+              "value": "VIDEO"
+            },
+            {
+              "name": "video_url",
+              "value": "={{ $json.publicUrl }}"
+            },
+            {
+              "name": "caption",
+              "value": "={{ $json.instagram_post_caption + '\\n\\n' + $json.hashtags.join(' ') }}"
+            }
+          ]
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "ig_post_container",
+      "name": "📸 [4/10] IG: Post – Create Container",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        5520,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_FB_CRED_ID",
+          "name": "Facebook Page Access Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 60,
+        "unit": "seconds"
+      },
+      "id": "ig_post_wait",
+      "name": "⏳ IG: Post – Wait for Processing",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        5760,
+        0
+      ],
+      "webhookId": "ig_post_wait"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/YOUR_INSTAGRAM_BUSINESS_USER_ID/media_publish",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "creation_id",
+              "value": "={{ $('📸 [4/10] IG: Post – Create Container').item.json.id }}"
+            }
+          ]
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "ig_post_publish",
+      "name": "📸 IG: Post – Publish",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        6000,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_FB_CRED_ID",
+          "name": "Facebook Page Access Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\n// Capture result of ig_post upload\nconst httpResult = $input.item.json;\nconst isError    = httpResult != null && (\n  httpResult.error != null ||\n  (typeof httpResult.message === 'string' && httpResult.message.toLowerCase().includes('error')) ||\n  (httpResult.statusCode != null && httpResult.statusCode >= 400)\n);\n\n// Get accumulated status from previous capture (or init)\nconst prevJson = $(\"\\ud83d\\udcca CAP: FB Story Status\").first().json;\nconst status   = { ...(prevJson._status || {}) };\nstatus[\"ig_post\"] = {\n  ok:    !isError,\n  error: isError ? (\n    httpResult?.error?.message ||\n    httpResult?.message ||\n    JSON.stringify(httpResult).substring(0, 200)\n  ) : null\n};\n\n// Re-attach binary and pass full data forward\nconst base = $(\"\\ud83e\\udde9 CODE: Assemble Final Data\").first();\nreturn {\n  json:   { ...base.json, _status: status },\n  binary: base.binary\n};\n"
+      },
+      "id": "cap_ig_post",
+      "name": "📊 CAP: IG Post Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6240,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/YOUR_INSTAGRAM_BUSINESS_USER_ID/media",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "media_type",
+              "value": "REELS"
+            },
+            {
+              "name": "video_url",
+              "value": "={{ $json.publicUrl }}"
+            },
+            {
+              "name": "caption",
+              "value": "={{ $json.instagram_reels_caption + '\\n\\n' + $json.hashtags.join(' ') }}"
+            }
+          ]
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "ig_reels_container",
+      "name": "📸 [5/10] IG: Reels – Create Container",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        6480,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_FB_CRED_ID",
+          "name": "Facebook Page Access Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 60,
+        "unit": "seconds"
+      },
+      "id": "ig_reels_wait",
+      "name": "⏳ IG: Reels – Wait for Processing",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        6720,
+        0
+      ],
+      "webhookId": "ig_reels_wait"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/YOUR_INSTAGRAM_BUSINESS_USER_ID/media_publish",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "creation_id",
+              "value": "={{ $('📸 [5/10] IG: Reels – Create Container').item.json.id }}"
+            }
+          ]
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "ig_reels_publish",
+      "name": "📸 IG: Reels – Publish",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        6960,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_FB_CRED_ID",
+          "name": "Facebook Page Access Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\n// Capture result of ig_reels upload\nconst httpResult = $input.item.json;\nconst isError    = httpResult != null && (\n  httpResult.error != null ||\n  (typeof httpResult.message === 'string' && httpResult.message.toLowerCase().includes('error')) ||\n  (httpResult.statusCode != null && httpResult.statusCode >= 400)\n);\n\n// Get accumulated status from previous capture (or init)\nconst prevJson = $(\"\\ud83d\\udcca CAP: IG Post Status\").first().json;\nconst status   = { ...(prevJson._status || {}) };\nstatus[\"ig_reels\"] = {\n  ok:    !isError,\n  error: isError ? (\n    httpResult?.error?.message ||\n    httpResult?.message ||\n    JSON.stringify(httpResult).substring(0, 200)\n  ) : null\n};\n\n// Re-attach binary and pass full data forward\nconst base = $(\"\\ud83e\\udde9 CODE: Assemble Final Data\").first();\nreturn {\n  json:   { ...base.json, _status: status },\n  binary: base.binary\n};\n"
+      },
+      "id": "cap_ig_reels",
+      "name": "📊 CAP: IG Reels Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7200,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/YOUR_INSTAGRAM_BUSINESS_USER_ID/media",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "media_type",
+              "value": "STORIES"
+            },
+            {
+              "name": "video_url",
+              "value": "={{ $json.publicUrl }}"
+            }
+          ]
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "ig_story_container",
+      "name": "📸 [6/10] IG: Story – Create Container",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        7440,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_FB_CRED_ID",
+          "name": "Facebook Page Access Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 60,
+        "unit": "seconds"
+      },
+      "id": "ig_story_wait",
+      "name": "⏳ IG: Story – Wait for Processing",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        7680,
+        0
+      ],
+      "webhookId": "ig_story_wait"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/YOUR_INSTAGRAM_BUSINESS_USER_ID/media_publish",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "creation_id",
+              "value": "={{ $('📸 [6/10] IG: Story – Create Container').item.json.id }}"
+            }
+          ]
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "ig_story_publish",
+      "name": "📸 IG: Story – Publish",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        7920,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_FB_CRED_ID",
+          "name": "Facebook Page Access Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\n// Capture result of ig_story upload\nconst httpResult = $input.item.json;\nconst isError    = httpResult != null && (\n  httpResult.error != null ||\n  (typeof httpResult.message === 'string' && httpResult.message.toLowerCase().includes('error')) ||\n  (httpResult.statusCode != null && httpResult.statusCode >= 400)\n);\n\n// Get accumulated status from previous capture (or init)\nconst prevJson = $(\"\\ud83d\\udcca CAP: IG Reels Status\").first().json;\nconst status   = { ...(prevJson._status || {}) };\nstatus[\"ig_story\"] = {\n  ok:    !isError,\n  error: isError ? (\n    httpResult?.error?.message ||\n    httpResult?.message ||\n    JSON.stringify(httpResult).substring(0, 200)\n  ) : null\n};\n\n// Re-attach binary and pass full data forward\nconst base = $(\"\\ud83e\\udde9 CODE: Assemble Final Data\").first();\nreturn {\n  json:   { ...base.json, _status: status },\n  binary: base.binary\n};\n"
+      },
+      "id": "cap_ig_story",
+      "name": "📊 CAP: IG Story Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        8160,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        },
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "=JSON.stringify({\"snippet\":{\"title\":\"{{ $json.youtube_video_title }}\",\"description\":\"{{ $json.youtube_video_description }}\\n\\n{{ $json.hashtags.join(' ') }}\",\"tags\":{{ JSON.stringify($json.youtube_video_tags) }},\"categoryId\":\"22\"},\"status\":{\"privacyStatus\":\"public\",\"selfDeclaredMadeForKids\":false}})",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Upload-Content-Type",
+              "value": "video/mp4"
+            }
+          ]
+        }
+      },
+      "id": "yt_video_init",
+      "name": "▶️ [7/10] YT: Video – Init Resumable Upload",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        8400,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "REPLACE_YT_CRED_ID",
+          "name": "YouTube OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst uploadUrl = ($json.headers || {}).location || ($json.headers || {}).Location;\nif (!uploadUrl) {\n  throw new Error('YouTube did not return Location header. Check OAuth2 scope (youtube.upload) and API quota. Headers: ' + JSON.stringify(($json || {}).headers));\n}\nreturn {\n  json: {\n    uploadUrl,\n    mimeType: $('🧩 CODE: Assemble Final Data').first().json.mimeType || 'video/mp4'\n  },\n  binary: $('🧩 CODE: Assemble Final Data').first().binary\n};\n"
+      },
+      "id": "yt_video_prep",
+      "name": "▶️ YT: Video – Prep Binary Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        8640,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $json.uploadUrl }}",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "binaryData",
+        "inputDataFieldName": "data",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "={{ $json.mimeType }}"
+            }
+          ]
+        }
+      },
+      "id": "yt_video_upload",
+      "name": "▶️ YT: Video – Upload File",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        8880,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "REPLACE_YT_CRED_ID",
+          "name": "YouTube OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\n// Capture result of yt_video upload\nconst httpResult = $input.item.json;\nconst isError    = httpResult != null && (\n  httpResult.error != null ||\n  (typeof httpResult.message === 'string' && httpResult.message.toLowerCase().includes('error')) ||\n  (httpResult.statusCode != null && httpResult.statusCode >= 400)\n);\n\n// Get accumulated status from previous capture (or init)\nconst prevJson = $(\"\\ud83d\\udcca CAP: IG Story Status\").first().json;\nconst status   = { ...(prevJson._status || {}) };\nstatus[\"yt_video\"] = {\n  ok:    !isError,\n  error: isError ? (\n    httpResult?.error?.message ||\n    httpResult?.message ||\n    JSON.stringify(httpResult).substring(0, 200)\n  ) : null\n};\n\n// Re-attach binary and pass full data forward\nconst base = $(\"\\ud83e\\udde9 CODE: Assemble Final Data\").first();\nreturn {\n  json:   { ...base.json, _status: status },\n  binary: base.binary\n};\n"
+      },
+      "id": "cap_yt_video",
+      "name": "📊 CAP: YT Video Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        9120,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        },
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "=JSON.stringify({\"snippet\":{\"title\":\"{{ $json.youtube_shorts_title }} #Shorts\",\"description\":\"{{ $json.youtube_video_description }}\\n\\n{{ $json.hashtags.join(' ') }}\",\"tags\":{{ JSON.stringify($json.youtube_video_tags) }},\"categoryId\":\"22\"},\"status\":{\"privacyStatus\":\"public\",\"selfDeclaredMadeForKids\":false}})",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Upload-Content-Type",
+              "value": "video/mp4"
+            }
+          ]
+        }
+      },
+      "id": "yt_shorts_init",
+      "name": "▶️ [8/10] YT: Shorts – Init Resumable Upload",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        9360,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "REPLACE_YT_CRED_ID",
+          "name": "YouTube OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst uploadUrl = ($json.headers || {}).location || ($json.headers || {}).Location;\nif (!uploadUrl) {\n  throw new Error('YouTube Shorts: no Location header. Check OAuth2 scope and quota. Headers: ' + JSON.stringify(($json || {}).headers));\n}\nreturn {\n  json: {\n    uploadUrl,\n    mimeType: $('🧩 CODE: Assemble Final Data').first().json.mimeType || 'video/mp4'\n  },\n  binary: $('🧩 CODE: Assemble Final Data').first().binary\n};\n"
+      },
+      "id": "yt_shorts_prep",
+      "name": "▶️ YT: Shorts – Prep Binary Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        9600,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $json.uploadUrl }}",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "binaryData",
+        "inputDataFieldName": "data",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "={{ $json.mimeType }}"
+            }
+          ]
+        }
+      },
+      "id": "yt_shorts_upload",
+      "name": "▶️ YT: Shorts – Upload File",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        9840,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "REPLACE_YT_CRED_ID",
+          "name": "YouTube OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\n// Capture result of yt_shorts upload\nconst httpResult = $input.item.json;\nconst isError    = httpResult != null && (\n  httpResult.error != null ||\n  (typeof httpResult.message === 'string' && httpResult.message.toLowerCase().includes('error')) ||\n  (httpResult.statusCode != null && httpResult.statusCode >= 400)\n);\n\n// Get accumulated status from previous capture (or init)\nconst prevJson = $(\"\\ud83d\\udcca CAP: YT Video Status\").first().json;\nconst status   = { ...(prevJson._status || {}) };\nstatus[\"yt_shorts\"] = {\n  ok:    !isError,\n  error: isError ? (\n    httpResult?.error?.message ||\n    httpResult?.message ||\n    JSON.stringify(httpResult).substring(0, 200)\n  ) : null\n};\n\n// Re-attach binary and pass full data forward\nconst base = $(\"\\ud83e\\udde9 CODE: Assemble Final Data\").first();\nreturn {\n  json:   { ...base.json, _status: status },\n  binary: base.binary\n};\n"
+      },
+      "id": "cap_yt_shorts",
+      "name": "📊 CAP: YT Shorts Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        10080,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://open.tiktokapis.com/v2/post/publish/video/init/",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "=JSON.stringify({\"post_info\":{\"title\":\"{{ $json.tiktok_video_caption.substring(0,150) }}\",\"privacy_level\":\"PUBLIC_TO_EVERYONE\",\"disable_duet\":false,\"disable_comment\":false,\"disable_stitch\":false,\"video_cover_timestamp_ms\":1000},\"source_info\":{\"source\":\"FILE_UPLOAD\",\"video_size\":{{ $json.fileSize }},\"chunk_size\":{{ $json.fileSize }},\"total_chunk_count\":1}})",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json; charset=UTF-8"
+            }
+          ]
+        }
+      },
+      "id": "tt_video_init",
+      "name": "🎵 [9/10] TT: Video – Init Upload",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        10320,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TT_CRED_ID",
+          "name": "TikTok Access Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst d = ($json.data || $json);\nconst uploadUrl = d.upload_url;\nif (!uploadUrl) {\n  const err = d.error || $json.error || {};\n  throw new Error('TikTok Video Init failed. Code: ' + (err.code || 'unknown') + ' Msg: ' + (err.message || JSON.stringify($json).substring(0, 200)));\n}\nreturn {\n  json: {\n    uploadUrl,\n    publishId: d.publish_id,\n    fileSize:  $('�� CODE: Assemble Final Data').first().json.fileSize,\n    mimeType:  $('🧩 CODE: Assemble Final Data').first().json.mimeType || 'video/mp4'\n  },\n  binary: $('🧩 CODE: Assemble Final Data').first().binary\n};\n"
+      },
+      "id": "tt_video_prep",
+      "name": "🎵 TT: Video – Prep Binary Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        10560,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $json.uploadUrl }}",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "binaryData",
+        "inputDataFieldName": "data",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "={{ $json.mimeType }}"
+            },
+            {
+              "name": "Content-Range",
+              "value": "=bytes 0-{{ $json.fileSize - 1 }}/{{ $json.fileSize }}"
+            }
+          ]
+        }
+      },
+      "id": "tt_video_upload",
+      "name": "🎵 TT: Video – Upload File",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        10800,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\n// Capture result of tt_video upload\nconst httpResult = $input.item.json;\nconst isError    = httpResult != null && (\n  httpResult.error != null ||\n  (typeof httpResult.message === 'string' && httpResult.message.toLowerCase().includes('error')) ||\n  (httpResult.statusCode != null && httpResult.statusCode >= 400)\n);\n\n// Get accumulated status from previous capture (or init)\nconst prevJson = $(\"\\ud83d\\udcca CAP: YT Shorts Status\").first().json;\nconst status   = { ...(prevJson._status || {}) };\nstatus[\"tt_video\"] = {\n  ok:    !isError,\n  error: isError ? (\n    httpResult?.error?.message ||\n    httpResult?.message ||\n    JSON.stringify(httpResult).substring(0, 200)\n  ) : null\n};\n\n// Re-attach binary and pass full data forward\nconst base = $(\"\\ud83e\\udde9 CODE: Assemble Final Data\").first();\nreturn {\n  json:   { ...base.json, _status: status },\n  binary: base.binary\n};\n"
+      },
+      "id": "cap_tt_video",
+      "name": "📊 CAP: TT Video Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        11040,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://open.tiktokapis.com/v2/post/publish/content/init/",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "=JSON.stringify({\"post_info\":{\"title\":\"{{ $json.tiktok_story_text.substring(0,150) }}\",\"privacy_level\":\"PUBLIC_TO_EVERYONE\",\"disable_duet\":false,\"disable_comment\":false,\"disable_stitch\":false,\"video_cover_timestamp_ms\":1000},\"source_info\":{\"source\":\"FILE_UPLOAD\",\"video_size\":{{ $json.fileSize }},\"chunk_size\":{{ $json.fileSize }},\"total_chunk_count\":1}})",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json; charset=UTF-8"
+            }
+          ]
+        }
+      },
+      "id": "tt_story_init",
+      "name": "🎵 [10/10] TT: Story – Init Upload",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        11280,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TT_CRED_ID",
+          "name": "TikTok Access Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst d = ($json.data || $json);\nconst uploadUrl = d.upload_url;\nif (!uploadUrl) {\n  const err = d.error || $json.error || {};\n  throw new Error('TikTok Story Init failed. Code: ' + (err.code || 'unknown') + ' Msg: ' + (err.message || JSON.stringify($json).substring(0, 200)));\n}\nreturn {\n  json: {\n    uploadUrl,\n    publishId: d.publish_id,\n    fileSize:  $('🧩 CODE: Assemble Final Data').first().json.fileSize,\n    mimeType:  $('🧩 CODE: Assemble Final Data').first().json.mimeType || 'video/mp4'\n  },\n  binary: $('🧩 CODE: Assemble Final Data').first().binary\n};\n"
+      },
+      "id": "tt_story_prep",
+      "name": "🎵 TT: Story – Prep Binary Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        11520,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $json.uploadUrl }}",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "binaryData",
+        "inputDataFieldName": "data",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "={{ $json.mimeType }}"
+            },
+            {
+              "name": "Content-Range",
+              "value": "=bytes 0-{{ $json.fileSize - 1 }}/{{ $json.fileSize }}"
+            }
+          ]
+        }
+      },
+      "id": "tt_story_upload",
+      "name": "🎵 TT: Story – Upload File",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        11760,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\n// Capture result of tt_story upload\nconst httpResult = $input.item.json;\nconst isError    = httpResult != null && (\n  httpResult.error != null ||\n  (typeof httpResult.message === 'string' && httpResult.message.toLowerCase().includes('error')) ||\n  (httpResult.statusCode != null && httpResult.statusCode >= 400)\n);\n\n// Get accumulated status from previous capture (or init)\nconst prevJson = $(\"\\ud83d\\udcca CAP: TT Video Status\").first().json;\nconst status   = { ...(prevJson._status || {}) };\nstatus[\"tt_story\"] = {\n  ok:    !isError,\n  error: isError ? (\n    httpResult?.error?.message ||\n    httpResult?.message ||\n    JSON.stringify(httpResult).substring(0, 200)\n  ) : null\n};\n\n// Re-attach binary and pass full data forward\nconst base = $(\"\\ud83e\\udde9 CODE: Assemble Final Data\").first();\nreturn {\n  json:   { ...base.json, _status: status },\n  binary: base.binary\n};\n"
+      },
+      "id": "cap_tt_story",
+      "name": "📊 CAP: TT Story Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        12000,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst s = $input.item.json._status || {};\n\n// Platform display order\nconst platforms = [\n  { key: 'fb_page_post',  label: '[1/10] Facebook Page Post',  emoji: '📘' },\n  { key: 'fb_reels',      label: '[2/10] Facebook Reels',       emoji: '📘' },\n  { key: 'fb_story',      label: '[3/10] Facebook Story',       emoji: '📘' },\n  { key: 'ig_post',       label: '[4/10] Instagram Post',       emoji: '📸' },\n  { key: 'ig_reels',      label: '[5/10] Instagram Reels',      emoji: '📸' },\n  { key: 'ig_story',      label: '[6/10] Instagram Story',      emoji: '📸' },\n  { key: 'yt_video',      label: '[7/10] YouTube Video',        emoji: '▶️' },\n  { key: 'yt_shorts',     label: '[8/10] YouTube Shorts',       emoji: '▶️' },\n  { key: 'tt_video',      label: '[9/10] TikTok Video',         emoji: '🎵' },\n  { key: 'tt_story',      label: '[10/10] TikTok Story',        emoji: '🎵' },\n];\n\nlet successCount = 0;\nlet failCount = 0;\nconst rows = [];\n\nfor (const p of platforms) {\n  const r = s[p.key];\n  if (!r) {\n    rows.push(`⚠️ ${p.label}: Not reached`);\n    continue;\n  }\n  if (r.ok) {\n    successCount++;\n    rows.push(`✅ ${p.label}`);\n  } else {\n    failCount++;\n    rows.push(`❌ ${p.label}`);\n    rows.push(`   └ Error: ${(r.error || 'unknown').substring(0, 150)}`);\n  }\n}\n\nconst base = $input.item.json;\nconst overall = failCount === 0 ? '✅ All uploaded successfully' :\n                successCount === 0 ? '❌ All uploads failed' :\n                `⚠️ ${successCount}/10 succeeded, ${failCount} failed`;\n\nconst msg = [\n  '🎬 *Upload Report*',\n  '━━━━━━━━━━━━━━━━━━━━━━━━━',\n  '📁 ' + base.fileName,\n  '━━━━━━━━━━━━━━━━━━━━━━━━━',\n  '',\n  ...rows,\n  '',\n  '━━━━━━━━━━━━━━━━━━━━━━━━━',\n  '📊 ' + overall,\n  '📁 Moved to: Completed Folder',\n  '⏰ ' + new Date().toLocaleString('en-US', { timeZone: 'Asia/Kathmandu' }) + ' (NPT)',\n].join('\\n');\n\n// Build sheets row\nconst sheetRow = [\n  new Date().toISOString(),\n  base.fileName,\n  base.fileId,\n  ...platforms.map(p => {\n    const r = s[p.key];\n    if (!r) return 'Not reached';\n    return r.ok ? 'OK' : ('ERROR: ' + (r.error || '').substring(0, 100));\n  }),\n  overall\n];\n\nreturn {\n  json: {\n    ...base,\n    _report:    msg,\n    _sheetRow:  sheetRow,\n    _successCount: successCount,\n    _failCount:    failCount,\n    _overall:   overall\n  }\n};\n"
+      },
+      "id": "compile_report",
+      "name": "📊 CODE: Compile Final Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        12240,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/YOUR_WA_PHONE_NUMBER_ID/messages",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "=JSON.stringify({\"messaging_product\":\"whatsapp\",\"to\":\"+9779845670262\",\"type\":\"text\",\"text\":{\"preview_url\":false,\"body\":\"{{ $json._report }}\"}})",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "id": "wa_final_report",
+      "name": "📲 WA: Send Final Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        12480,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WA_CRED_ID",
+          "name": "WhatsApp Cloud API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "move",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.fileId }}",
+          "mode": "id"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $json.completedFolderId }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "move_to_completed",
+      "name": "📁 Drive: Move to Completed Folder",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        12720,
+        0
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "REPLACE_GDRIVE_CRED_ID",
+          "name": "Google Drive OAuth2"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_NAME",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {
+          "cellFormat": "USER_ENTERED"
+        }
+      },
+      "id": "sheets_append",
+      "name": "📊 Sheets: Append Upload Report Row",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        12960,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_SHEETS_CRED_ID",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "⚠️ Workflow Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "📲 CODE: Build Error WA Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📲 CODE: Build Error WA Message": {
+      "main": [
+        [
+          {
+            "node": "📲 WA: Send Error Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📁 Google Drive: New File in Upload Folder": {
+      "main": [
+        [
+          {
+            "node": "🔍 IF: Is Video File?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔍 IF: Is Video File?": {
+      "main": [
+        [
+          {
+            "node": "⚙️ SET: Extract File Info",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "🚫 Non-Video File: Skip",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ SET: Extract File Info": {
+      "main": [
+        [
+          {
+            "node": "🔓 Drive: Make File Publicly Accessible",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔓 Drive: Make File Publicly Accessible": {
+      "main": [
+        [
+          {
+            "node": "🤖 AI: Generate Platform Content",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "📥 Drive: Download Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🤖 AI: Generate Platform Content": {
+      "main": [
+        [
+          {
+            "node": "📥 Drive: Download Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📥 Drive: Download Video": {
+      "main": [
+        [
+          {
+            "node": "🧩 CODE: Assemble Final Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 CODE: Assemble Final Data": {
+      "main": [
+        [
+          {
+            "node": "📲 CODE: Build WA Approval Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📲 CODE: Build WA Approval Message": {
+      "main": [
+        [
+          {
+            "node": "📲 WA: Send Preview & Approval Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📲 WA: Send Preview & Approval Request": {
+      "main": [
+        [
+          {
+            "node": "⏳ WAIT: Approval (2-min timeout)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⏳ WAIT: Approval (2-min timeout)": {
+      "main": [
+        [
+          {
+            "node": "🔍 CODE: Parse Approval Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔍 CODE: Parse Approval Response": {
+      "main": [
+        [
+          {
+            "node": "🔒 IF: Upload Rejected?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔒 IF: Upload Rejected?": {
+      "main": [
+        [
+          {
+            "node": "📲 WA: Send Upload Cancelled",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "📘 [1/10] FB: Page Video Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📲 WA: Send Upload Cancelled": {
+      "main": [
+        [
+          {
+            "node": "🛑 HALT: Upload Cancelled",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📘 [1/10] FB: Page Video Post": {
+      "main": [
+        [
+          {
+            "node": "📊 CAP: FB Page Post Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📊 CAP: FB Page Post Status": {
+      "main": [
+        [
+          {
+            "node": "📘 [2/10] FB: Reels – Init Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📘 [2/10] FB: Reels – Init Upload": {
+      "main": [
+        [
+          {
+            "node": "📘 FB: Reels – Prep Binary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📘 FB: Reels – Prep Binary": {
+      "main": [
+        [
+          {
+            "node": "📘 FB: Reels – Upload Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📘 FB: Reels – Upload Video": {
+      "main": [
+        [
+          {
+            "node": "📘 FB: Reels – Publish",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📘 FB: Reels – Publish": {
+      "main": [
+        [
+          {
+            "node": "📊 CAP: FB Reels Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📊 CAP: FB Reels Status": {
+      "main": [
+        [
+          {
+            "node": "📘 [3/10] FB: Story – Init Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📘 [3/10] FB: Story – Init Upload": {
+      "main": [
+        [
+          {
+            "node": "📘 FB: Story – Prep Binary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📘 FB: Story – Prep Binary": {
+      "main": [
+        [
+          {
+            "node": "📘 FB: Story – Upload Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📘 FB: Story – Upload Video": {
+      "main": [
+        [
+          {
+            "node": "📘 FB: Story – Publish",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📘 FB: Story – Publish": {
+      "main": [
+        [
+          {
+            "node": "📊 CAP: FB Story Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📊 CAP: FB Story Status": {
+      "main": [
+        [
+          {
+            "node": "📸 [4/10] IG: Post – Create Container",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📸 [4/10] IG: Post – Create Container": {
+      "main": [
+        [
+          {
+            "node": "⏳ IG: Post – Wait for Processing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⏳ IG: Post – Wait for Processing": {
+      "main": [
+        [
+          {
+            "node": "📸 IG: Post – Publish",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📸 IG: Post – Publish": {
+      "main": [
+        [
+          {
+            "node": "📊 CAP: IG Post Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📊 CAP: IG Post Status": {
+      "main": [
+        [
+          {
+            "node": "📸 [5/10] IG: Reels – Create Container",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📸 [5/10] IG: Reels – Create Container": {
+      "main": [
+        [
+          {
+            "node": "⏳ IG: Reels – Wait for Processing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⏳ IG: Reels – Wait for Processing": {
+      "main": [
+        [
+          {
+            "node": "📸 IG: Reels – Publish",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📸 IG: Reels – Publish": {
+      "main": [
+        [
+          {
+            "node": "📊 CAP: IG Reels Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📊 CAP: IG Reels Status": {
+      "main": [
+        [
+          {
+            "node": "📸 [6/10] IG: Story – Create Container",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📸 [6/10] IG: Story – Create Container": {
+      "main": [
+        [
+          {
+            "node": "⏳ IG: Story – Wait for Processing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⏳ IG: Story – Wait for Processing": {
+      "main": [
+        [
+          {
+            "node": "📸 IG: Story – Publish",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📸 IG: Story – Publish": {
+      "main": [
+        [
+          {
+            "node": "📊 CAP: IG Story Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📊 CAP: IG Story Status": {
+      "main": [
+        [
+          {
+            "node": "▶️ [7/10] YT: Video – Init Resumable Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "▶️ [7/10] YT: Video – Init Resumable Upload": {
+      "main": [
+        [
+          {
+            "node": "▶️ YT: Video – Prep Binary Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "▶️ YT: Video – Prep Binary Data": {
+      "main": [
+        [
+          {
+            "node": "▶️ YT: Video – Upload File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "▶️ YT: Video – Upload File": {
+      "main": [
+        [
+          {
+            "node": "📊 CAP: YT Video Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📊 CAP: YT Video Status": {
+      "main": [
+        [
+          {
+            "node": "▶️ [8/10] YT: Shorts – Init Resumable Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "▶️ [8/10] YT: Shorts – Init Resumable Upload": {
+      "main": [
+        [
+          {
+            "node": "▶️ YT: Shorts – Prep Binary Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "▶️ YT: Shorts – Prep Binary Data": {
+      "main": [
+        [
+          {
+            "node": "▶️ YT: Shorts – Upload File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "▶️ YT: Shorts – Upload File": {
+      "main": [
+        [
+          {
+            "node": "📊 CAP: YT Shorts Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📊 CAP: YT Shorts Status": {
+      "main": [
+        [
+          {
+            "node": "🎵 [9/10] TT: Video – Init Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🎵 [9/10] TT: Video – Init Upload": {
+      "main": [
+        [
+          {
+            "node": "🎵 TT: Video – Prep Binary Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🎵 TT: Video – Prep Binary Data": {
+      "main": [
+        [
+          {
+            "node": "🎵 TT: Video – Upload File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🎵 TT: Video – Upload File": {
+      "main": [
+        [
+          {
+            "node": "📊 CAP: TT Video Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📊 CAP: TT Video Status": {
+      "main": [
+        [
+          {
+            "node": "🎵 [10/10] TT: Story – Init Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🎵 [10/10] TT: Story – Init Upload": {
+      "main": [
+        [
+          {
+            "node": "🎵 TT: Story – Prep Binary Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🎵 TT: Story – Prep Binary Data": {
+      "main": [
+        [
+          {
+            "node": "🎵 TT: Story – Upload File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🎵 TT: Story – Upload File": {
+      "main": [
+        [
+          {
+            "node": "📊 CAP: TT Story Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📊 CAP: TT Story Status": {
+      "main": [
+        [
+          {
+            "node": "📊 CODE: Compile Final Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📊 CODE: Compile Final Report": {
+      "main": [
+        [
+          {
+            "node": "📲 WA: Send Final Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📲 WA: Send Final Report": {
+      "main": [
+        [
+          {
+            "node": "📁 Drive: Move to Completed Folder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📁 Drive: Move to Completed Folder": {
+      "main": [
+        [
+          {
+            "node": "📊 Sheets: Append Upload Report Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "versionId": "smvap-v2-2024",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "local"
+  },
+  "tags": [
+    {
+      "name": "Social Media"
+    },
+    {
+      "name": "Video Automation"
+    },
+    {
+      "name": "WhatsApp"
+    },
+    {
+      "name": "Google Drive"
+    },
+    {
+      "name": "AI Content"
+    },
+    {
+      "name": "Google Sheets"
+    }
+  ]
+}
