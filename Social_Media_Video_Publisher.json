@@ -1,0 +1,1695 @@
+{
+  "name": "🎬 Social Media Video Auto Publisher from Google Drive",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 🎬 Social Media Video Auto Publisher from Google Drive\n\n### What This Workflow Does\nWatches a Google Drive folder → detects new video → generates AI content (OpenAI GPT-4o) → publishes to **11 destinations** automatically:\n- 📘 Facebook: Page Post, Reels, Story\n- 📸 Instagram: Post, Reels, Story\n- ▶️ YouTube: Video, Shorts *(YouTube Stories discontinued 2023)*\n- 🎵 TikTok: Video, Story\n\n---\n### ⚡ Quick Setup\n\n**Step 1 – Create Credentials** *(Settings → Credentials)*\n| # | Name | Type | Details |\n|---|------|------|---------|\n| 1 | Google Drive OAuth2 | Google Drive OAuth2 API | Complete OAuth flow |\n| 2 | OpenAI API Key (Header Auth) | HTTP Header Auth | Header: `Authorization` Value: `Bearer sk-YOUR_KEY` |\n| 3 | Facebook Page Access Token | HTTP Header Auth | Header: `Authorization` Value: `Bearer YOUR_PAGE_TOKEN` |\n| 4 | YouTube OAuth2 | OAuth2 (Google) | Scope: `youtube.upload` |\n| 5 | TikTok Access Token | HTTP Header Auth | Header: `Authorization` Value: `Bearer YOUR_TOKEN` |\n| 6 | SMTP Email | SMTP | Your mail server |\n\n**Step 2 – Replace Placeholders in Nodes**\n- `YOUR_GOOGLE_DRIVE_FOLDER_ID` → ID from Drive folder URL\n- `YOUR_FACEBOOK_PAGE_ID` → Facebook Page numeric ID\n- `YOUR_INSTAGRAM_BUSINESS_USER_ID` → Instagram Business account ID\n- `YOUR_ERROR_NOTIFICATION_EMAIL` → Email for error alerts\n\n**Step 3 – Activate** *(toggle at top right)*\n\n---\n### ⚠️ Notes\n- Videos must be valid MP4/MOV, recommended ≤ 500 MB\n- Instagram requires a publicly accessible video URL\n- Facebook Reels & Story use 3-phase binary upload (init → upload → publish)\n- YouTube uses resumable upload with OAuth2\n- TikTok Story API requires special app permission from TikTok",
+        "height": 720,
+        "width": 560,
+        "color": 5
+      },
+      "id": "note_setup",
+      "name": "📋 SETUP GUIDE",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -720,
+        -700
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 📘 Facebook – What You Need\n\n### Credentials\n- Facebook **Developer App** at developers.facebook.com\n- **Page Access Token** (long-lived, 60 days)\n- Required Permissions: `pages_manage_posts`, `pages_read_engagement`, `publish_video`\n\n### How to Get Page Access Token\n1. Go to Graph API Explorer\n2. Select your App → select your Page\n3. Generate User Token → Exchange for Page Token\n4. Extend to long-lived token\n\n### API Endpoints Used\n| Feature | Method & Endpoint |\n|---------|-------------------|\n| Page Video Post | `POST /v18.0/PAGE_ID/videos` (file_url) |\n| Reels – Start | `POST /v18.0/PAGE_ID/video_reels` (upload_phase=start) |\n| Reels – Upload | `PUT {upload_url}` binary video |\n| Reels – Publish | `POST /v18.0/PAGE_ID/video_reels` (upload_phase=finish) |\n| Story – Start | `POST /v18.0/PAGE_ID/video_stories` (upload_phase=start) |\n| Story – Upload | `PUT {upload_url}` binary video |\n| Story – Publish | `POST /v18.0/PAGE_ID/video_stories` (upload_phase=finish) |\n\n### Get Page ID\nFacebook Page → About → Page ID (at the bottom)",
+        "height": 480,
+        "width": 420,
+        "color": 2
+      },
+      "id": "note_fb",
+      "name": "📘 Facebook API Guide",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1460,
+        -800
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 📸 Instagram – What You Need\n\n### Credentials\n- Instagram **Business** or **Creator** account linked to a Facebook Page\n- Same **Facebook Page Access Token** as above\n- Permissions: `instagram_basic`, `instagram_content_publish`, `instagram_manage_media`\n\n### API Flow for All Types\n1. **Create Container** → POST to `/{IG_USER_ID}/media`\n   - For Post: `media_type=VIDEO`\n   - For Reels: `media_type=REELS`\n   - For Story: `media_type=STORIES`\n   - Returns `container_id`\n2. **Wait 60 seconds** (video processing)\n3. **Publish** → POST to `/{IG_USER_ID}/media_publish` with `creation_id`\n\n### Get Instagram User ID\n1. Graph API Explorer\n2. Run: `GET /me?fields=id,name` with your Facebook token\n3. Or: `GET /me/accounts` to list connected IG accounts\n\n### Important\n- Video URL must be **publicly accessible** (HTTPS)\n- Reels: max 90 seconds, vertical preferred\n- Stories: auto-expire after 24 hours",
+        "height": 420,
+        "width": 420,
+        "color": 2
+      },
+      "id": "note_ig",
+      "name": "📸 Instagram API Guide",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1460,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## ▶️ YouTube – What You Need\n\n### Credentials\n- Google Cloud Console project\n- Enable **YouTube Data API v3**\n- Create **OAuth2 Client ID** (Web App type)\n- Authorized redirect: `https://YOUR_N8N_INSTANCE/rest/oauth2-credential/callback`\n- Scope: `https://www.googleapis.com/auth/youtube.upload`\n\n### Upload Flow (Resumable)\n**Node 1 – Init:** `POST /upload/youtube/v3/videos?uploadType=resumable&part=snippet,status`\n- Body: JSON with title, description, tags, status\n- Returns: `Location` header → contains upload URL\n\n**Node 2 – Prep:** Code node re-attaches binary data + extracts upload URL from Location header\n\n**Node 3 – Upload:** `PUT {location_url}` with raw video binary\n\n### YouTube Shorts\n- Same upload flow as regular Video\n- YouTube auto-classifies as Short if duration ≤ 60s AND vertical (9:16)\n- `#Shorts` added to title automatically\n\n### ⚠️ YouTube Stories – DISCONTINUED\nYouTube Stories were shut down in June 2023. Not included in this workflow.",
+        "height": 440,
+        "width": 420,
+        "color": 2
+      },
+      "id": "note_yt",
+      "name": "▶️ YouTube API Guide",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1460,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 🎵 TikTok – What You Need\n\n### Credentials\n- TikTok Developer Account at developers.tiktok.com\n- App with **Content Posting API** approved\n- User Access Token via OAuth2\n- Scopes: `video.publish`, `video.upload`\n\n### Video Upload Flow\n**Node 1 – Init:** `POST /v2/post/publish/video/init/`\n- Body: post_info (title, privacy) + source_info (FILE_UPLOAD, size, chunk)\n- Returns: `upload_url` + `publish_id`\n\n**Node 2 – Prep:** Code node re-attaches binary + extracts upload URL\n\n**Node 3 – Upload:** `PUT {upload_url}` binary video with Content-Range header\n\n### Story Upload Flow\n- Uses `POST /v2/post/publish/content/init/`\n- Requires separate **Story permission** approval from TikTok\n\n### Privacy Levels\n`PUBLIC_TO_EVERYONE` | `MUTUAL_FOLLOW_FRIENDS` | `SELF_ONLY`\n\n### ⚠️ Note\nTikTok Story API requires special permission approval. Contact TikTok developer support.",
+        "height": 440,
+        "width": 420,
+        "color": 2
+      },
+      "id": "note_tt",
+      "name": "🎵 TikTok API Guide",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1460,
+        1020
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "error_trigger",
+      "name": "⚠️ Workflow Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -400,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "noreply@yourdomain.com",
+        "toEmail": "YOUR_ERROR_NOTIFICATION_EMAIL",
+        "subject": "=❌ Social Media Publisher Error – {{ $json.workflow.name }}",
+        "emailType": "html",
+        "message": "=<h2>❌ Workflow Error Detected</h2><table border='1' cellpadding='8'><tr><td><b>Workflow</b></td><td>{{ $json.workflow.name }}</td></tr><tr><td><b>Execution ID</b></td><td>{{ $json.execution.id }}</td></tr><tr><td><b>Last Node</b></td><td>{{ $json.execution.lastNodeExecuted }}</td></tr><tr><td><b>Error</b></td><td>{{ $json.execution.error.message }}</td></tr><tr><td><b>Time</b></td><td>{{ $now.toISO() }}</td></tr></table><p><a href='{{ $json.execution.url }}'>▶ View Full Execution Log</a></p><pre>{{ $json.execution.error.stack }}</pre>",
+        "options": {}
+      },
+      "id": "error_email",
+      "name": "📧 Send Error Notification",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        -180,
+        500
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "REPLACE_EMAIL_CRED_ID",
+          "name": "SMTP Email"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "triggerOn": "specificFolder",
+        "folderToWatch": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_DRIVE_FOLDER_ID",
+          "mode": "id"
+        },
+        "event": "fileCreated",
+        "options": {}
+      },
+      "id": "drive_trigger",
+      "name": "📁 Google Drive: New Video Added",
+      "type": "n8n-nodes-base.googleDriveTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "REPLACE_GDRIVE_CRED_ID",
+          "name": "Google Drive OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "video-mime-check",
+              "leftValue": "={{ $json.mimeType }}",
+              "rightValue": "video/",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "video_check",
+      "name": "🔍 IF: Is Video File?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "not_video",
+      "name": "🚫 Non-Video File: Skip",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        440,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "fileId",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "fileName",
+              "value": "={{ $json.name }}",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "mimeType",
+              "value": "={{ $json.mimeType }}",
+              "type": "string"
+            },
+            {
+              "id": "a4",
+              "name": "fileSize",
+              "value": "={{ $json.size || 0 }}",
+              "type": "number"
+            },
+            {
+              "id": "a5",
+              "name": "description",
+              "value": "={{ $json.description || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "a6",
+              "name": "publicUrl",
+              "value": "=https://drive.google.com/uc?export=download&id={{ $json.id }}&confirm=t",
+              "type": "string"
+            },
+            {
+              "id": "a7",
+              "name": "shareUrl",
+              "value": "=https://drive.google.com/file/d/{{ $json.id }}/view?usp=sharing",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "set_file_info",
+      "name": "⚙️ SET: Extract File Info",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://www.googleapis.com/drive/v3/files/{{ $json.fileId }}/permissions",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "=JSON.stringify({\"role\":\"reader\",\"type\":\"anyone\"})",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "id": "make_public",
+      "name": "🔓 Drive: Make File Publicly Accessible",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        660,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "REPLACE_GDRIVE_CRED_ID",
+          "name": "Google Drive OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "=JSON.stringify({\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"system\",\"content\":\"You are a professional social media content creator. Generate engaging, platform-optimised content for a video. Respond ONLY with valid JSON (no markdown fences). Use exactly this JSON structure: {\\\"facebook_post_caption\\\":\\\"...\\\",\\\"facebook_reels_caption\\\":\\\"...\\\",\\\"facebook_story_text\\\":\\\"...\\\",\\\"instagram_post_caption\\\":\\\"...\\\",\\\"instagram_reels_caption\\\":\\\"...\\\",\\\"instagram_story_text\\\":\\\"...\\\",\\\"youtube_video_title\\\":\\\"...\\\",\\\"youtube_video_description\\\":\\\"...\\\",\\\"youtube_video_tags\\\":[\\\"tag1\\\",\\\"tag2\\\"],\\\"youtube_shorts_title\\\":\\\"...\\\",\\\"tiktok_video_caption\\\":\\\"...\\\",\\\"tiktok_story_text\\\":\\\"...\\\",\\\"hashtags\\\":[\\\"#tag1\\\",\\\"#tag2\\\"]}\"},{\"role\":\"user\",\"content\":\"Create social media content for a video named: {{ $('\\\\u2699\\\\ufe0f SET: Extract File Info').item.json.fileName }}. Description: {{ $('\\\\u2699\\\\ufe0f SET: Extract File Info').item.json.description }}. Make it engaging with relevant emojis, strong call-to-action, and 10-15 relevant hashtags.\"}],\"response_format\":{\"type\":\"json_object\"},\"max_tokens\":2000})",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "id": "ai_generate",
+      "name": "🤖 AI: Generate Platform Content",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        880,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_OPENAI_CRED_ID",
+          "name": "OpenAI API Key (Header Auth)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $('⚙️ SET: Extract File Info').item.json.fileId }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "download_video",
+      "name": "📥 Drive: Download Video",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1100,
+        0
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "REPLACE_GDRIVE_CRED_ID",
+          "name": "Google Drive OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\n// ── Parse AI response ──────────────────────────────────────────────────────\nconst aiNode = $('🤖 AI: Generate Platform Content').first();\nlet ai = {};\ntry {\n  ai = JSON.parse(aiNode.json.choices[0].message.content);\n} catch (e) {\n  throw new Error(\n    '⚠️ Failed to parse OpenAI JSON response. ' +\n    'Check your OpenAI credential and model availability. ' +\n    'Raw response: ' + JSON.stringify(aiNode.json).substring(0, 500)\n  );\n}\n\n// ── Validate required AI fields ───────────────────────────────────────────\nconst required = [\n  'facebook_post_caption','facebook_reels_caption','facebook_story_text',\n  'instagram_post_caption','instagram_reels_caption','instagram_story_text',\n  'youtube_video_title','youtube_video_description','youtube_video_tags',\n  'youtube_shorts_title','tiktok_video_caption','tiktok_story_text','hashtags'\n];\nfor (const field of required) {\n  if (!ai[field]) ai[field] = ai.facebook_post_caption || 'Check out this video!';\n}\nif (!Array.isArray(ai.youtube_video_tags)) ai.youtube_video_tags = ['video'];\nif (!Array.isArray(ai.hashtags)) ai.hashtags = ['#video'];\n\n// ── Get file metadata ──────────────────────────────────────────────────────\nconst fi = $('\\u2699\\ufe0f SET: Extract File Info').first().json;\n\n// ── Return assembled item with binary from Download node ──────────────────\nreturn {\n  json: {\n    ...ai,\n    fileId:      fi.fileId,\n    fileName:    fi.fileName,\n    mimeType:    fi.mimeType   || 'video/mp4',\n    fileSize:    fi.fileSize   || 0,\n    publicUrl:   fi.publicUrl,\n    shareUrl:    fi.shareUrl,\n    description: fi.description,\n    _processedAt: new Date().toISOString()\n  },\n  binary: $input.item.binary   // binary.data = downloaded video file\n};\n"
+      },
+      "id": "assemble_data",
+      "name": "🧩 CODE: Assemble Final Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/YOUR_FACEBOOK_PAGE_ID/videos",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "file_url",
+              "value": "={{ $json.publicUrl }}"
+            },
+            {
+              "name": "description",
+              "value": "={{ $json.facebook_post_caption + '\\n\\n' + $json.hashtags.join(' ') }}"
+            },
+            {
+              "name": "published",
+              "value": "true"
+            }
+          ]
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "fb_page_post",
+      "name": "📘 FB: Page Video Post",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1600,
+        -560
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_FB_CRED_ID",
+          "name": "Facebook Page Access Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/YOUR_FACEBOOK_PAGE_ID/video_reels",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "upload_phase",
+              "value": "start"
+            }
+          ]
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "fb_reels_init",
+      "name": "📘 FB: Reels – Init Upload",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1600,
+        -360
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_FB_CRED_ID",
+          "name": "Facebook Page Access Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\n// Re-attach video binary and capture upload URL from Reels Init response\nconst initData = $json;\nif (!initData.upload_url || !initData.video_id) {\n  throw new Error('Facebook Reels Init failed. Response: ' + JSON.stringify(initData));\n}\nreturn {\n  json: {\n    uploadUrl: initData.upload_url,\n    videoId:   initData.video_id,\n    fileSize:  $('🧩 CODE: Assemble Final Data').first().json.fileSize\n  },\n  binary: $('🧩 CODE: Assemble Final Data').first().binary\n};\n"
+      },
+      "id": "fb_reels_prep",
+      "name": "📘 FB: Reels – Prep Binary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1820,
+        -360
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.uploadUrl }}",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "binaryData",
+        "inputDataFieldName": "data",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "offset",
+              "value": "0"
+            },
+            {
+              "name": "file_size",
+              "value": "={{ $json.fileSize }}"
+            }
+          ]
+        }
+      },
+      "id": "fb_reels_upload",
+      "name": "📘 FB: Reels – Upload Video",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2040,
+        -360
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_FB_CRED_ID",
+          "name": "Facebook Page Access Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/YOUR_FACEBOOK_PAGE_ID/video_reels",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "upload_phase",
+              "value": "finish"
+            },
+            {
+              "name": "video_id",
+              "value": "={{ $('📘 FB: Reels – Init Upload').item.json.video_id }}"
+            },
+            {
+              "name": "video_state",
+              "value": "PUBLISHED"
+            },
+            {
+              "name": "description",
+              "value": "={{ $('🧩 CODE: Assemble Final Data').first().json.facebook_reels_caption + '\\n\\n' + $('🧩 CODE: Assemble Final Data').first().json.hashtags.join(' ') }}"
+            }
+          ]
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "fb_reels_publish",
+      "name": "📘 FB: Reels – Publish",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2260,
+        -360
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_FB_CRED_ID",
+          "name": "Facebook Page Access Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/YOUR_FACEBOOK_PAGE_ID/video_stories",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "upload_phase",
+              "value": "start"
+            }
+          ]
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "fb_story_init",
+      "name": "📘 FB: Story – Init Upload",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1600,
+        -160
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_FB_CRED_ID",
+          "name": "Facebook Page Access Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst initData = $json;\nif (!initData.upload_url || !initData.video_id) {\n  throw new Error('Facebook Story Init failed. Response: ' + JSON.stringify(initData));\n}\nreturn {\n  json: {\n    uploadUrl: initData.upload_url,\n    videoId:   initData.video_id,\n    fileSize:  $('🧩 CODE: Assemble Final Data').first().json.fileSize\n  },\n  binary: $('🧩 CODE: Assemble Final Data').first().binary\n};\n"
+      },
+      "id": "fb_story_prep",
+      "name": "📘 FB: Story – Prep Binary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1820,
+        -160
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.uploadUrl }}",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "binaryData",
+        "inputDataFieldName": "data",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "offset",
+              "value": "0"
+            },
+            {
+              "name": "file_size",
+              "value": "={{ $json.fileSize }}"
+            }
+          ]
+        }
+      },
+      "id": "fb_story_upload",
+      "name": "📘 FB: Story – Upload Video",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2040,
+        -160
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_FB_CRED_ID",
+          "name": "Facebook Page Access Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/YOUR_FACEBOOK_PAGE_ID/video_stories",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "upload_phase",
+              "value": "finish"
+            },
+            {
+              "name": "video_id",
+              "value": "={{ $('📘 FB: Story – Init Upload').item.json.video_id }}"
+            },
+            {
+              "name": "video_state",
+              "value": "PUBLISHED"
+            }
+          ]
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "fb_story_publish",
+      "name": "📘 FB: Story – Publish",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2260,
+        -160
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_FB_CRED_ID",
+          "name": "Facebook Page Access Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/YOUR_INSTAGRAM_BUSINESS_USER_ID/media",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "media_type",
+              "value": "VIDEO"
+            },
+            {
+              "name": "video_url",
+              "value": "={{ $json.publicUrl }}"
+            },
+            {
+              "name": "caption",
+              "value": "={{ $json.instagram_post_caption + '\\n\\n' + $json.hashtags.join(' ') }}"
+            }
+          ]
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "ig_post_container",
+      "name": "📸 IG: Post – Create Container",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1600,
+        80
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_FB_CRED_ID",
+          "name": "Facebook Page Access Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 60,
+        "unit": "seconds"
+      },
+      "id": "ig_post_wait",
+      "name": "⏳ IG: Post – Wait for Processing",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        1820,
+        80
+      ],
+      "webhookId": "ig_post_wait"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/YOUR_INSTAGRAM_BUSINESS_USER_ID/media_publish",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "creation_id",
+              "value": "={{ $('📸 IG: Post – Create Container').item.json.id }}"
+            }
+          ]
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "ig_post_publish",
+      "name": "📸 IG: Post – Publish",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2040,
+        80
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_FB_CRED_ID",
+          "name": "Facebook Page Access Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/YOUR_INSTAGRAM_BUSINESS_USER_ID/media",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "media_type",
+              "value": "REELS"
+            },
+            {
+              "name": "video_url",
+              "value": "={{ $json.publicUrl }}"
+            },
+            {
+              "name": "caption",
+              "value": "={{ $json.instagram_reels_caption + '\\n\\n' + $json.hashtags.join(' ') }}"
+            }
+          ]
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "ig_reels_container",
+      "name": "📸 IG: Reels – Create Container",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1600,
+        280
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_FB_CRED_ID",
+          "name": "Facebook Page Access Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 60,
+        "unit": "seconds"
+      },
+      "id": "ig_reels_wait",
+      "name": "⏳ IG: Reels – Wait for Processing",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        1820,
+        280
+      ],
+      "webhookId": "ig_reels_wait"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/YOUR_INSTAGRAM_BUSINESS_USER_ID/media_publish",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "creation_id",
+              "value": "={{ $('📸 IG: Reels – Create Container').item.json.id }}"
+            }
+          ]
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "ig_reels_publish",
+      "name": "📸 IG: Reels – Publish",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2040,
+        280
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_FB_CRED_ID",
+          "name": "Facebook Page Access Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/YOUR_INSTAGRAM_BUSINESS_USER_ID/media",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "media_type",
+              "value": "STORIES"
+            },
+            {
+              "name": "video_url",
+              "value": "={{ $json.publicUrl }}"
+            }
+          ]
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "ig_story_container",
+      "name": "📸 IG: Story – Create Container",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1600,
+        480
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_FB_CRED_ID",
+          "name": "Facebook Page Access Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 60,
+        "unit": "seconds"
+      },
+      "id": "ig_story_wait",
+      "name": "⏳ IG: Story – Wait for Processing",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        1820,
+        480
+      ],
+      "webhookId": "ig_story_wait"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/YOUR_INSTAGRAM_BUSINESS_USER_ID/media_publish",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "creation_id",
+              "value": "={{ $('📸 IG: Story – Create Container').item.json.id }}"
+            }
+          ]
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "ig_story_publish",
+      "name": "📸 IG: Story – Publish",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2040,
+        480
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_FB_CRED_ID",
+          "name": "Facebook Page Access Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        },
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "=JSON.stringify({\"snippet\":{\"title\":\"{{ $json.youtube_video_title }}\" + \"\",\"description\":\"{{ $json.youtube_video_description }}\\n\\n{{ $json.hashtags.join(' ') }}\",\"tags\":{{ JSON.stringify($json.youtube_video_tags) }},\"categoryId\":\"22\"},\"status\":{\"privacyStatus\":\"public\",\"selfDeclaredMadeForKids\":false}})",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Upload-Content-Type",
+              "value": "video/mp4"
+            }
+          ]
+        }
+      },
+      "id": "yt_video_init",
+      "name": "▶️ YT: Video – Init Resumable Upload",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1600,
+        680
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "REPLACE_YT_CRED_ID",
+          "name": "YouTube OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\n// YouTube returns the resumable upload URL in the 'location' response header\nconst uploadUrl = ($json.headers || {}).location || ($json.headers || {}).Location;\nif (!uploadUrl) {\n  throw new Error(\n    '⚠️ YouTube did not return a Location header. ' +\n    'Verify YouTube OAuth2 credential has youtube.upload scope and API quota is available. ' +\n    'Response headers: ' + JSON.stringify(($json || {}).headers)\n  );\n}\nreturn {\n  json: {\n    uploadUrl,\n    mimeType: $('🧩 CODE: Assemble Final Data').first().json.mimeType || 'video/mp4'\n  },\n  binary: $('🧩 CODE: Assemble Final Data').first().binary\n};\n"
+      },
+      "id": "yt_video_prep",
+      "name": "▶️ YT: Video – Prep Binary Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1820,
+        680
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $json.uploadUrl }}",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "binaryData",
+        "inputDataFieldName": "data",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "={{ $json.mimeType }}"
+            }
+          ]
+        }
+      },
+      "id": "yt_video_upload",
+      "name": "▶️ YT: Video – Upload File",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2040,
+        680
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "REPLACE_YT_CRED_ID",
+          "name": "YouTube OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        },
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "=JSON.stringify({\"snippet\":{\"title\":\"{{ $json.youtube_shorts_title }}\" + \" #Shorts\",\"description\":\"{{ $json.youtube_video_description }}\\n\\n{{ $json.hashtags.join(' ') }}\",\"tags\":{{ JSON.stringify($json.youtube_video_tags) }},\"categoryId\":\"22\"},\"status\":{\"privacyStatus\":\"public\",\"selfDeclaredMadeForKids\":false}})",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Upload-Content-Type",
+              "value": "video/mp4"
+            }
+          ]
+        }
+      },
+      "id": "yt_shorts_init",
+      "name": "▶️ YT: Shorts – Init Resumable Upload",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1600,
+        880
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "REPLACE_YT_CRED_ID",
+          "name": "YouTube OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\n// YouTube returns the resumable upload URL in the 'location' response header\nconst uploadUrl = ($json.headers || {}).location || ($json.headers || {}).Location;\nif (!uploadUrl) {\n  throw new Error(\n    '⚠️ YouTube did not return a Location header. ' +\n    'Verify YouTube OAuth2 credential has youtube.upload scope and API quota is available. ' +\n    'Response headers: ' + JSON.stringify(($json || {}).headers)\n  );\n}\nreturn {\n  json: {\n    uploadUrl,\n    mimeType: $('🧩 CODE: Assemble Final Data').first().json.mimeType || 'video/mp4'\n  },\n  binary: $('🧩 CODE: Assemble Final Data').first().binary\n};\n"
+      },
+      "id": "yt_shorts_prep",
+      "name": "▶️ YT: Shorts – Prep Binary Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1820,
+        880
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $json.uploadUrl }}",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "binaryData",
+        "inputDataFieldName": "data",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "={{ $json.mimeType }}"
+            }
+          ]
+        }
+      },
+      "id": "yt_shorts_upload",
+      "name": "▶️ YT: Shorts – Upload File",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2040,
+        880
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "REPLACE_YT_CRED_ID",
+          "name": "YouTube OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://open.tiktokapis.com/v2/post/publish/video/init/",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "=JSON.stringify({\"post_info\":{\"title\":\"{{ $json.tiktok_video_caption.substring(0,150) }}\",\"privacy_level\":\"PUBLIC_TO_EVERYONE\",\"disable_duet\":false,\"disable_comment\":false,\"disable_stitch\":false,\"video_cover_timestamp_ms\":1000},\"source_info\":{\"source\":\"FILE_UPLOAD\",\"video_size\":{{ $json.fileSize }},\"chunk_size\":{{ $json.fileSize }},\"total_chunk_count\":1}})",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json; charset=UTF-8"
+            }
+          ]
+        }
+      },
+      "id": "tt_video_init",
+      "name": "🎵 TT: Video – Init Upload",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1600,
+        1080
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TT_CRED_ID",
+          "name": "TikTok Access Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst d = ($json.data || $json);\nconst uploadUrl = d.upload_url;\nconst publishId = d.publish_id;\nif (!uploadUrl) {\n  const err = d.error || $json.error || {};\n  throw new Error(\n    '⚠️ TikTok Init failed. Code: ' + (err.code || 'unknown') +\n    ' Message: ' + (err.message || JSON.stringify($json))\n  );\n}\nreturn {\n  json: {\n    uploadUrl,\n    publishId,\n    fileSize: $('🧩 CODE: Assemble Final Data').first().json.fileSize,\n    mimeType: $('🧩 CODE: Assemble Final Data').first().json.mimeType || 'video/mp4'\n  },\n  binary: $('🧩 CODE: Assemble Final Data').first().binary\n};\n"
+      },
+      "id": "tt_video_prep",
+      "name": "🎵 TT: Video – Prep Binary Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1820,
+        1080
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $json.uploadUrl }}",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "binaryData",
+        "inputDataFieldName": "data",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "={{ $json.mimeType }}"
+            },
+            {
+              "name": "Content-Range",
+              "value": "=bytes 0-{{ $json.fileSize - 1 }}/{{ $json.fileSize }}"
+            }
+          ]
+        }
+      },
+      "id": "tt_video_upload",
+      "name": "🎵 TT: Video – Upload Video",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2040,
+        1080
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://open.tiktokapis.com/v2/post/publish/content/init/",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "=JSON.stringify({\"post_info\":{\"title\":\"{{ $json.tiktok_story_text.substring(0,150) }}\",\"privacy_level\":\"PUBLIC_TO_EVERYONE\",\"disable_duet\":false,\"disable_comment\":false,\"disable_stitch\":false,\"video_cover_timestamp_ms\":1000},\"source_info\":{\"source\":\"FILE_UPLOAD\",\"video_size\":{{ $json.fileSize }},\"chunk_size\":{{ $json.fileSize }},\"total_chunk_count\":1}})",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json; charset=UTF-8"
+            }
+          ]
+        }
+      },
+      "id": "tt_story_init",
+      "name": "🎵 TT: Story – Init Upload",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1600,
+        1280
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TT_CRED_ID",
+          "name": "TikTok Access Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst d = ($json.data || $json);\nconst uploadUrl = d.upload_url;\nconst publishId = d.publish_id;\nif (!uploadUrl) {\n  const err = d.error || $json.error || {};\n  throw new Error(\n    '⚠️ TikTok Init failed. Code: ' + (err.code || 'unknown') +\n    ' Message: ' + (err.message || JSON.stringify($json))\n  );\n}\nreturn {\n  json: {\n    uploadUrl,\n    publishId,\n    fileSize: $('🧩 CODE: Assemble Final Data').first().json.fileSize,\n    mimeType: $('🧩 CODE: Assemble Final Data').first().json.mimeType || 'video/mp4'\n  },\n  binary: $('🧩 CODE: Assemble Final Data').first().binary\n};\n"
+      },
+      "id": "tt_story_prep",
+      "name": "🎵 TT: Story – Prep Binary Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1820,
+        1280
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $json.uploadUrl }}",
+        "options": {},
+        "sendBody": true,
+        "bodyContentType": "binaryData",
+        "inputDataFieldName": "data",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "={{ $json.mimeType }}"
+            },
+            {
+              "name": "Content-Range",
+              "value": "=bytes 0-{{ $json.fileSize - 1 }}/{{ $json.fileSize }}"
+            }
+          ]
+        }
+      },
+      "id": "tt_story_upload",
+      "name": "🎵 TT: Story – Upload Video",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2040,
+        1280
+      ],
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "⚠️ Workflow Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "📧 Send Error Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📁 Google Drive: New Video Added": {
+      "main": [
+        [
+          {
+            "node": "🔍 IF: Is Video File?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔍 IF: Is Video File?": {
+      "main": [
+        [
+          {
+            "node": "⚙️ SET: Extract File Info",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "🚫 Non-Video File: Skip",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ SET: Extract File Info": {
+      "main": [
+        [
+          {
+            "node": "🔓 Drive: Make File Publicly Accessible",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔓 Drive: Make File Publicly Accessible": {
+      "main": [
+        [
+          {
+            "node": "🤖 AI: Generate Platform Content",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "📥 Drive: Download Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🤖 AI: Generate Platform Content": {
+      "main": [
+        [
+          {
+            "node": "📥 Drive: Download Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📥 Drive: Download Video": {
+      "main": [
+        [
+          {
+            "node": "🧩 CODE: Assemble Final Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 CODE: Assemble Final Data": {
+      "main": [
+        [
+          {
+            "node": "📘 FB: Page Video Post",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "📘 FB: Reels – Init Upload",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "📘 FB: Story – Init Upload",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "📸 IG: Post – Create Container",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "📸 IG: Reels – Create Container",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "📸 IG: Story – Create Container",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "▶️ YT: Video – Init Resumable Upload",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "▶️ YT: Shorts – Init Resumable Upload",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "🎵 TT: Video – Init Upload",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "🎵 TT: Story – Init Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📘 FB: Reels – Init Upload": {
+      "main": [
+        [
+          {
+            "node": "📘 FB: Reels – Prep Binary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📘 FB: Reels – Prep Binary": {
+      "main": [
+        [
+          {
+            "node": "📘 FB: Reels – Upload Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📘 FB: Reels – Upload Video": {
+      "main": [
+        [
+          {
+            "node": "📘 FB: Reels – Publish",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📘 FB: Story – Init Upload": {
+      "main": [
+        [
+          {
+            "node": "📘 FB: Story – Prep Binary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📘 FB: Story – Prep Binary": {
+      "main": [
+        [
+          {
+            "node": "📘 FB: Story – Upload Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📘 FB: Story – Upload Video": {
+      "main": [
+        [
+          {
+            "node": "📘 FB: Story – Publish",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📸 IG: Post – Create Container": {
+      "main": [
+        [
+          {
+            "node": "⏳ IG: Post – Wait for Processing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⏳ IG: Post – Wait for Processing": {
+      "main": [
+        [
+          {
+            "node": "📸 IG: Post – Publish",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📸 IG: Reels – Create Container": {
+      "main": [
+        [
+          {
+            "node": "⏳ IG: Reels – Wait for Processing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⏳ IG: Reels – Wait for Processing": {
+      "main": [
+        [
+          {
+            "node": "📸 IG: Reels – Publish",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📸 IG: Story – Create Container": {
+      "main": [
+        [
+          {
+            "node": "⏳ IG: Story – Wait for Processing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⏳ IG: Story – Wait for Processing": {
+      "main": [
+        [
+          {
+            "node": "📸 IG: Story – Publish",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "▶️ YT: Video – Init Resumable Upload": {
+      "main": [
+        [
+          {
+            "node": "▶️ YT: Video – Prep Binary Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "▶️ YT: Video – Prep Binary Data": {
+      "main": [
+        [
+          {
+            "node": "▶️ YT: Video – Upload File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "▶️ YT: Shorts – Init Resumable Upload": {
+      "main": [
+        [
+          {
+            "node": "▶️ YT: Shorts – Prep Binary Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "▶️ YT: Shorts – Prep Binary Data": {
+      "main": [
+        [
+          {
+            "node": "▶️ YT: Shorts – Upload File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🎵 TT: Video – Init Upload": {
+      "main": [
+        [
+          {
+            "node": "🎵 TT: Video – Prep Binary Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🎵 TT: Video – Prep Binary Data": {
+      "main": [
+        [
+          {
+            "node": "🎵 TT: Video – Upload Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🎵 TT: Story – Init Upload": {
+      "main": [
+        [
+          {
+            "node": "🎵 TT: Story – Prep Binary Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🎵 TT: Story – Prep Binary Data": {
+      "main": [
+        [
+          {
+            "node": "🎵 TT: Story – Upload Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "versionId": "smvap-v1-2024",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "local"
+  },
+  "tags": [
+    {
+      "name": "Social Media"
+    },
+    {
+      "name": "Video Automation"
+    },
+    {
+      "name": "Google Drive"
+    },
+    {
+      "name": "AI Content"
+    }
+  ]
+}
