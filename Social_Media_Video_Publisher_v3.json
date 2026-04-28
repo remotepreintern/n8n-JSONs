@@ -303,6 +303,8 @@
       ],
       "onError": "continueRegularOutput",
       "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
         "method": "POST",
         "url": "=https://www.googleapis.com/drive/v3/files/{{ $json.fileId }}/permissions",
         "options": {},
