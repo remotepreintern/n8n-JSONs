@@ -1755,8 +1755,10 @@
         0
       ],
       "parameters": {
-        "mode": "combineAll",
-        "options": {}
+        "mode": "combineByPosition",
+        "options": {
+          "includeUnpaired": true
+        }
       }
     },
     {
